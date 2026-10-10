@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>¡Escapa, Óvulo! 🔊</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:18px;font-family:system-ui,Arial;background:linear-gradient(135deg,#ffe5ef,#e7f5ff);color:#263238}
+.app{max-width:920px;margin:auto;background:#fff;border-radius:28px;padding:20px;box-shadow:0 15px 50px #0002}h1{text-align:center;margin:0;font-size:34px}.sub{text-align:center;color:#68757d;margin:4px 0 15px}
+.stats{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.pill{padding:8px 13px;background:#f3f7fa;border-radius:999px;font-weight:800}
+.game{position:relative;background:#fff9fc;border:2px solid #f0dce5;border-radius:20px;overflow:hidden;margin-top:12px}canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;touch-action:none}
+.msg{text-align:center;min-height:28px;font-weight:800;padding:9px}.controls{display:flex;justify-content:center;gap:8px;margin-top:8px}.ctrl{width:55px;height:45px;border:1px solid #ccd9df;border-radius:12px;background:#fff;font-size:21px;font-weight:bold;touch-action:none}
+.actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:10px}.btn{border:0;border-radius:13px;padding:11px 18px;background:#e46b9b;color:white;font-weight:800;cursor:pointer}.btn.dark{background:#526d7a}
+.info{margin-top:14px;padding:13px 16px;background:#f6fafc;border-radius:15px;font-size:14px;line-height:1.45}
+</style></head><body><div class="app">
+<h1>🏃‍♀️💨 ¡ESCAPA, ÓVULO!</h1><div class="sub">Ahora sí: ¡ESPERMATOZOIDES persiguiendo al óvulo! 😂🔊</div>
+<div class="stats"><span class="pill">⭐ <b id="score">0</b></span><span class="pill">❤️ <b id="lives">3</b></span><span class="pill">🔥 Combo <b id="combo">0</b></span><span class="pill">🌸 Nivel <b id="level">1</b></span><span class="pill">🏁 <b id="dist">0</b> m</span></div>
+<div class="game"><canvas id="game" width="800" height="450"></canvas><div class="msg" id="msg">🔊 Pulsa “¡A CORRER!” para empezar con sonido.</div></div>
+<div class="controls"><button class="ctrl" data-k="ArrowLeft">←</button><button class="ctrl" data-k="ArrowUp">↑</button><button class="ctrl" data-k="ArrowDown">↓</button><button class="ctrl" data-k="ArrowRight">→</button></div>
+<div class="actions"><button class="btn" id="start">🏃‍♀️ ¡A CORRER!</button><button class="btn dark" id="pause">⏸ Pausa</button><button class="btn dark" id="sound">🔊 Sonido: ON</button></div>
+<div class="info"><b>🎮 Misión:</b> mueve al óvulo, esquiva los espermatozoides y recoge ⭐ 💎 ❤️ ⚡. Cada nivel aumenta la velocidad y la cantidad de perseguidores. <b>🔊</b> El juego genera sus propios efectos de sonido.</div>
+</div>
+<script>
+const C=document.getElementById("game"),ctx=C.getContext("2d"),W=C.width,H=C.height;
+let player,enemies,items,score,lives,combo,level,dist,running=false,paused=false,last,spawn,invuln,raf,keys={},audioOn=true,audioCtx;
+const spermColors=["#7a8fa6","#65829b","#879bb0","#58758e"];
+function audio(){if(!audioOn)return;if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume()}
+function beep(freq,dur=.09,type="sine",vol=.035){if(!audioOn)return;audio();let o=audioCtx.createOscillator(),g=audioCtx.createGain();o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(vol,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+dur);o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur)}
+function soundPickup(){beep(660,.07);setTimeout(()=>beep(880,.1),65)}
+function soundHit(){beep(120,.18,"sawtooth",.045);setTimeout(()=>beep(80,.2,"square",.03),90)}
+function soundLevel(){[440,554,659,880].forEach((f,i)=>setTimeout(()=>beep(f,.12),i*90))}
+function reset(){player={x:105,y:H/2,r:20,s:4.3};enemies=[];items=[];score=0;lives=3;combo=0;level=1;dist=0;spawn=0;invuln=0;update();draw()}
+function update(){document.getElementById("score").textContent=score;document.getElementById("lives").textContent=lives;document.getElementById("combo").textContent=combo;document.getElementById("level").textContent=level;document.getElementById("dist").textContent=Math.floor(dist)}
+function say(t){document.getElementById("msg").textContent=t}
+function addSperm(){enemies.push({x:W+35,y:40+Math.random()*(H-80),r:13,s:2.2+level*.38+Math.random()*1.8,wig:Math.random()*6.28,c:spermColors[Math.floor(Math.random()*spermColors.length)]})}
+function addItem(){let a=[["⭐",15],["💎",35],["❤️",0],["⚡",0]][Math.floor(Math.random()*4)];items.push({x:W+20,y:45+Math.random()*(H-90),r:16,e:a[0],p:a[1]})}
+function hit(a,b){return Math.hypot(a.x-b.x,a.y-b.y)<a.r+b.r}
+function drawSperm(e){ctx.save();ctx.translate(e.x,e.y);ctx.rotate(-.12);ctx.strokeStyle=e.c;ctx.lineWidth=4;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-9,3);ctx.bezierCurveTo(-19,-7,-25,10,-33,0);ctx.bezierCurveTo(-39,-8,-43,7,-48,-1);ctx.stroke();ctx.beginPath();ctx.arc(0,0,13,0,Math.PI*2);ctx.fillStyle="#eef5fa";ctx.fill();ctx.strokeStyle=e.c;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=e.c;ctx.beginPath();ctx.arc(4,-4,3,0,Math.PI*2);ctx.fill();ctx.restore()}
+function draw(){ctx.clearRect(0,0,W,H);let g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,"#fff0f6");g.addColorStop(1,"#e9f7ff");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ctx.strokeStyle="#efdbe4";ctx.lineWidth=1;for(let x=0;x<W;x+=45){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}for(let y=0;y<H;y+=45){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+ctx.fillStyle="#9aafba";ctx.font="bold 16px system-ui";ctx.fillText("🧬 ZONA DE ESCAPE DEL ÓVULO",18,26);
+items.forEach(i=>{ctx.font="30px system-ui";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(i.e,i.x,i.y)});enemies.forEach(drawSperm);
+if(invuln>0&&Math.floor(invuln/6)%2===0)ctx.globalAlpha=.3;ctx.font="40px system-ui";ctx.fillText("🥚",player.x,player.y);ctx.globalAlpha=1;
+ctx.textAlign="left";ctx.textBaseline="alphabetic"}
+function end(t){running=false;cancelAnimationFrame(raf);say(t+" ⭐ Puntuación: "+score);beep(180,.3,"sawtooth")}
+function startGame(){audio();reset();running=true;paused=false;document.getElementById("pause").textContent="⏸ Pausa";say("🚨 ¡CORRE ÓVULO! ¡AHÍ VIENEN!");beep(520,.1);setTimeout(()=>beep(700,.1),100);last=performance.now();raf=requestAnimationFrame(loop)}
+function loop(t){if(!running)return;if(paused){last=t;raf=requestAnimationFrame(loop);return}let dt=Math.min(2,(t-last)/16.67);last=t;
+let dx=(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0),dy=(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);if(dx||dy){let m=Math.hypot(dx,dy);player.x+=dx/m*player.s*dt;player.y+=dy/m*player.s*dt}player.x=Math.max(30,Math.min(W-30,player.x));player.y=Math.max(40,Math.min(H-40,player.y));if(invuln>0)invuln-=dt;dist+=.13*level*dt;spawn-=dt;
+if(spawn<=0){addSperm();if(Math.random()<.78)addItem();spawn=Math.max(9,28-level*2)+Math.random()*16}
+if(dist>=level*90){level++;player.s+=.15;say("🌟 ¡NIVEL "+level+"! ¡MÁS ESPERMATOZOIDES! 😭");soundLevel()}
+enemies.forEach(e=>{e.x-=e.s*dt;e.wig+=.06*dt;e.y+=Math.sin(e.wig)*.65*dt});
+for(let i=enemies.length-1;i>=0;i--){let e=enemies[i];if(e.x<-60){enemies.splice(i,1);continue}if(hit(player,e)&&invuln<=0){lives--;combo=0;invuln=80;enemies.splice(i,1);soundHit();say("💥 ¡TE ALCANZÓ UNO! ¡HUYE! 😂");if(lives<=0){update();end("💀 ¡El óvulo fue alcanzado!");return}}}
+for(let i=items.length-1;i>=0;i--){let q=items[i];q.x-=(2.4+level*.18)*dt;if(q.x<-40){items.splice(i,1);continue}if(hit(player,q)){if(q.e==="⭐"){score+=15+combo*3;combo++;say("⭐ ¡PUNTAZO! Combo x"+combo)}else if(q.e==="💎"){score+=35;combo++;say("💎 ¡POWER-UP DE ORO!")}else if(q.e==="❤️"){lives=Math.min(5,lives+1);say("❤️ ¡VIDA EXTRA!")}else{invuln=120;score+=20;say("⚡ ¡ÓVULO TURBO ACTIVADO!")}soundPickup();items.splice(i,1)}}update();draw();raf=requestAnimationFrame(loop)}
+document.getElementById("start").onclick=startGame;document.getElementById("pause").onclick=()=>{if(!running)return;paused=!paused;document.getElementById("pause").textContent=paused?"▶ Continuar":"⏸ Pausa";say(paused?"⏸ Pausado":"🏃‍♀️ ¡SEGUIMOS!")};document.getElementById("sound").onclick=()=>{audioOn=!audioOn;document.getElementById("sound").textContent=audioOn?"🔊 Sonido: ON":"🔇 Sonido: OFF";if(audioOn)beep(700,.1)};
+window.addEventListener("keydown",e=>{if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key))e.preventDefault();keys[e.key]=true});window.addEventListener("keyup",e=>keys[e.key]=false);
+document.querySelectorAll(".ctrl").forEach(b=>{let k=b.dataset.k;b.addEventListener("pointerdown",()=>keys[k]=true);["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>keys[k]=false))});
+reset();
+</script></body></html>
